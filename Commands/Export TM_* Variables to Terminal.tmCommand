@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/bin/bash
+TM_TMPFILE=$(mktemp -t tmEnv)
+
+${TM_RUBY:=ruby}
+$TM_RUBY &gt;&gt;"$TM_TMPFILE" -- "$TM_BUNDLE_SUPPORT/tm_dump_env.rb"
+$TM_RUBY &gt;&gt;"$TM_TMPFILE" -- "$TM_BUNDLE_SUPPORT/tm_support_funcs.rb"
+
+esc () {
+STR="$1" ruby &lt;&lt;"RUBY"
+   str = ENV['STR']
+   str = str.gsub(/'/, "'\\\\''")
+   str = str.gsub(/[\\"]/, '\\\\\\0')
+   print "'#{str}'"
+RUBY
+}
+
+osascript &lt;&lt;- APPLESCRIPT
+  tell app "Terminal"
+    launch
+    activate
+    do script "echo -ne '\\\\ec'; cd $(esc "${TM_DIRECTORY}"); . $(esc "${TM_TMPFILE}"); . $(esc "${TM_SUPPORT_PATH}/lib/bash_init.sh"); __tm_bundle_switch $(esc "${TM_MODE}")"
+  end tell
+APPLESCRIPT
+</string>
+	<key>input</key>
+	<string>none</string>
+	<key>name</key>
+	<string>Export TM_* Variables to Terminal</string>
+	<key>output</key>
+	<string>showAsTooltip</string>
+	<key>uuid</key>
+	<string>C7CE0FDC-5B1C-4124-ADA9-E75CBFDE0A11</string>
+</dict>
+</plist>
