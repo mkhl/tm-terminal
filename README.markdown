@@ -1,8 +1,8 @@
 What this is
 ============
 
-`TM-Terminal` is a set of files that define TextMate command called “Export
-TM_* Variables to Terminal”. That command replicates the environment of the
+`TM-Terminal` is a set of files that define TextMate command called `Export
+TM_* Variables to Terminal`. That command replicates the environment of the
 running TextMate instance and loads it into a shell in Terminal.app, together
 with some supporting functionality. This setup creates a first approximation
 to a “TextMate REPL”, which may be useful for debugging your own bundles or
