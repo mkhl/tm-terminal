@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env ruby -wKU
+
+require ENV['TM_SUPPORT_PATH'] + '/lib/escape'
+
+def dump_env
+  ENV.keys.collect do |key|
+    next if '_' == key
+    "export #{key}=#{e_sh(ENV[key])}\n"
+  end.join("\n")
+end
+
+def support_funcs
+  mkpath = proc { |path| proc { |*args| File.join(path, *args) } }
+  tm_app = mkpath[%x{osascript -e 'POSIX path of (path to app "TextMate")'}.chomp]
+  local_app_support = mkpath[%x{osascript -e 'POSIX path of (path to application support from local domain)'}.chomp]
+  user_app_support  = mkpath[%x{osascript -e 'POSIX path of (path to application support from user domain)'}.chomp]
+
+  bundle_paths = [
+    # User Domain
+    user_app_support['TextMate/Bundles'],
+    user_app_support['TextMate/Pristine Copy/Bundles'],
+    # Local Domain
+    local_app_support['TextMate/Bundles'],
+    local_app_support['TextMate/Pristine Copy/Bundles'],
+    # Application
+    tm_app['Contents/SharedSupport/Bundles'],
+  ]
+
+  return &lt;&lt;-SHELL
+export TM_APP_PATH="#{e_sh(tm_app[])}"
+export TM_BUNDLE_SEARCH_PATH="#{bundle_paths.map(&amp;method(:e_sh)).join(":")}"
+
+__tm_bundle_switch () {
+  local bundle="$1"
+  local bundle_short="$(echo $bundle | sed 's/ //g')"
+  local bundle_shorter="${bundle_short%(*)}"
+  for b in "$bundle" "$bundle_short" "$bundle_shorter"; do
+    for d in #{bundle_paths.map(&amp;method(:e_sh)).join(" ")}; do
+      local bundle_path="$d/$b.tmbundle"
+      local bundle_support="$bundle_path/Support"
+      if [[ -d "$bundle_path" ]]; then
+        export TM_BUNDLE_PATH="$bundle_path"
+        if [[ -d "$bundle_support" ]]; then
+          export TM_BUNDLE_SUPPORT="$bundle_support"
+        else
+          unset TM_BUNDLE_SUPPORT
+        fi
+        return
+      fi
+    done
+  done
+  echo &gt;&amp;2 "Bundle not found: $1"
+  return 1
+}
+
+__tm_bundle_grep () {
+  command ls -d {#{bundle_paths.map(&amp;method(:e_sh)).join(",")}}/*.tmbundle | grep "$@"
+}
+
+__tm_reload () {
+  osascript -e 'tell app "TextMate" to reload bundles'
+}
+SHELL
+end
+
+def overrides
+  # Override functions from TextMate's bash_init.
+  # require_cmd: We won't get to display the HTML, print plain text.
+  return &lt;&lt;-SHELL
+require_cmd () {
+  if ! command type -p "$1" &gt;/dev/null; then
+    echo "$(basename -- "$0"): command not found: $1" &gt;&amp;2
+    shift
+    if [[ $# -ne 0 ]]; then
+        echo "$@" &gt;&amp;2
+    fi
+    exit_show_html;
+  fi
+}
+  SHELL
+end
+
+def term_script(tmpfile)
+  commands = [
+    # Clear screen and scrollback
+    %Q{echo -ne '\\\\ec'},
+    # cd to the right directory
+    %Q{cd '#{e_as(ENV['TM_DIRECTORY'])}'},
+    # Load TextMate bash support
+    %Q{source '#{e_as(ENV['TM_SUPPORT_PATH'])}/lib/bash_init.sh'},
+    # Load environmant and support
+    %Q{source '#{e_as(tmpfile)}'},
+    # Try to load the right bundle
+    %Q{__tm_bundle_switch '#{e_as(ENV['TM_MODE'])}'},
+  ]
+  return &lt;&lt;-APPLESCRIPT
+    tell app "Terminal"
+      launch
+      activate
+      do script "#{commands.join('; ')}"
+    end tell
+  APPLESCRIPT
+end
+
+def osascript(script)
+  open('|osascript', 'w') { |io| io &lt;&lt; script }
+end
+
+if __FILE__ == $PROGRAM_NAME
+  # Can't use Tempfile, which unlinks on close.
+  tmpfile = %x{/usr/bin/mktemp -t tmTerm}.chomp
+  open(tmpfile, 'w') do |tmp|
+    tmp &lt;&lt; dump_env
+    tmp &lt;&lt; support_funcs
+    tmp &lt;&lt; overrides
+    osascript(term_script(tmpfile))
+  end
+end
+</string>
+	<key>input</key>
+	<string>none</string>
+	<key>name</key>
+	<string>Export TM_* Variables to Terminal</string>
+	<key>output</key>
+	<string>showAsTooltip</string>
+	<key>uuid</key>
+	<string>C7CE0FDC-5B1C-4124-ADA9-E75CBFDE0A11</string>
+</dict>
+</plist>
